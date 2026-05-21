@@ -1,0 +1,100 @@
+import tkinter as tk
+import serial
+import time
+
+# --- CONEXIÓN SERIAL ---
+try:
+    # Ajusta tu COM aquí
+    arduino = serial.Serial('COM3', 9600, timeout=0.1)
+    time.sleep(2)
+except:
+    arduino = None
+
+def enviar_comando(cmd):
+    if arduino:
+        arduino.write(f"{cmd}\n".encode())
+
+# --- LÓGICA DE DETECCIÓN DE PISO ---
+def obtener_piso_texto(pulsos):
+    p = int(pulsos)
+    if p < 500: return "PLANTA BAJA"
+    elif 1000 <= p < 2000: return "PISO 1"
+    elif p >= 2500: return "PISO 2"
+    else: return "EN TRÁNSITO..."
+
+def actualizar_interfaz():
+    if arduino and arduino.in_waiting > 0:
+        try:
+            linea = arduino.readline().decode().strip()
+            if "POS:" in linea:
+                # Extraer datos
+                p_val = linea.split(',')[0].split(':')[1]
+                r_val = linea.split(',')[1].split(':')[1]
+                
+                # Actualizar números
+                lbl_pulsos.config(text=p_val)
+                lbl_rpm.config(text=f"{r_val} RPM")
+                
+                # Actualizar Piso Actual
+                piso_str = obtener_piso_texto(p_val)
+                lbl_piso_actual.config(text=piso_str)
+                
+                # Color dinámico si se mueve
+                if float(r_val) > 0:
+                    lbl_rpm.config(fg="#00e5ff")
+                else:
+                    lbl_rpm.config(fg="white")
+        except: pass
+    app.after(50, actualizar_interfaz)
+
+# --- VENTANA PRINCIPAL ---
+app = tk.Tk()
+app.title("INDUSTRIAL LIFT CONTROL")
+app.geometry("450x650")
+app.configure(bg="#1a1a2e") # Fondo azul marino industrial
+
+# Encabezado
+tk.Label(app, text="SISTEMA DE ELEVADOR", font=("Impact", 24), bg="#1a1a2e", fg="#e94560").pack(pady=20)
+
+# Pantalla de Piso Actual
+frame_piso = tk.Frame(app, bg="#16213e", bd=2, relief="sunken")
+frame_piso.pack(fill="x", padx=40, pady=10)
+tk.Label(frame_piso, text="UBICACIÓN ACTUAL", font=("Arial", 10), bg="#16213e", fg="#0f3460").pack()
+lbl_piso_actual = tk.Label(frame_piso, text="PB", font=("Courier New", 30, "bold"), bg="#16213e", fg="#00e5ff")
+lbl_piso_actual.pack(pady=5)
+
+# Panel de Datos (RPM y Pulsos)
+data_frame = tk.Frame(app, bg="#1a1a2e")
+data_frame.pack(pady=10)
+
+lbl_pulsos = tk.Label(data_frame, text="0", font=("Arial", 18), bg="#1a1a2e", fg="white")
+lbl_pulsos.grid(row=0, column=0, padx=20)
+tk.Label(data_frame, text="PULSOS", font=("Arial", 8), bg="#1a1a2e", fg="#533483").grid(row=1, column=0)
+
+lbl_rpm = tk.Label(data_frame, text="0.0 RPM", font=("Arial", 18), bg="#1a1a2e", fg="white")
+lbl_rpm.grid(row=0, column=1, padx=20)
+tk.Label(data_frame, text="VELOCIDAD", font=("Arial", 8), bg="#1a1a2e", fg="#533483").grid(row=1, column=1)
+
+# BOTÓN DE EMERGENCIA (ROJO Y GRANDE)
+btn_stop = tk.Button(app, text="STOP", font=("Arial", 14, "bold"), bg="#ff2e63", fg="white", 
+                     width=20, height=2, bd=4, command=lambda: enviar_comando("STOP"))
+btn_stop.pack(pady=20)
+
+# BOTONES REDONDOS (Simulados con padding y bordes en Tkinter clásico)
+tk.Label(app, text="SELECCIÓN DE PISOS", font=("Arial", 10, "bold"), bg="#1a1a2e", fg="white").pack()
+
+# Piso 2 (Morado)
+tk.Button(app, text="2", font=("Arial", 16, "bold"), bg="#533483", fg="white", 
+          width=5, height=2, bd=3, relief="raised", command=lambda: enviar_comando(3000)).pack(pady=5)
+
+# Piso 1 (Azul Oscuro)
+tk.Button(app, text="1", font=("Arial", 16, "bold"), bg="#0f3460", fg="white", 
+          width=5, height=2, bd=3, relief="raised", command=lambda: enviar_comando(1500)).pack(pady=5)
+
+# Planta Baja (Verde esmeralda para contrastar)
+tk.Button(app, text="PB", font=("Arial", 16, "bold"), bg="#1aa260", fg="white", 
+          width=5, height=2, bd=3, relief="raised", command=lambda: enviar_comando(0)).pack(pady=5)
+
+# --- INICIO DE BUCLE ---
+app.after(50, actualizar_interfaz)
+app.mainloop()
