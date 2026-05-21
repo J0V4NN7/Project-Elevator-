@@ -1,0 +1,97 @@
+
+const int ENA = 9;
+const int IN1 = 8;
+const int IN2 = 7;
+
+const int ENCA = 2;
+const int ENCB = 3;
+
+volatile long posicionActual = 0; 
+long posicionObjetivo = 0;
+
+unsigned long tiempoAnterior = 0;
+long pulsosAnteriores = 0;
+float rpm = 0.0;
+const float PPR = 341.0; 
+
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  
+  pinMode(ENCA, INPUT_PULLUP);
+  pinMode(ENCB, INPUT_PULLUP);
+  
+  attachInterrupt(digitalPinToInterrupt(ENCA), leerEncoder, CHANGE);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String comando = Serial.readStringUntil('\n');
+    comando.trim(); 
+    
+    if (comando == "STOP") {
+      posicionObjetivo = posicionActual; 
+      detenerElevador();                
+    } 
+    else {
+      posicionObjetivo = comando.toInt(); 
+    }
+  }
+
+  if (posicionActual < posicionObjetivo - 10) {
+    subirElevador();
+  } 
+  else if (posicionActual > posicionObjetivo + 10) {
+    bajarElevador();
+  } 
+  else {
+    detenerElevador();
+  }
+
+  unsigned long tiempoActual = millis();
+  if (tiempoActual - tiempoAnterior >= 100) {
+    long diferenciaPulsos = abs(posicionActual - pulsosAnteriores);
+    rpm = ((float)diferenciaPulsos / PPR) * 600.0;
+    
+    Serial.print("POS:");
+    Serial.print(posicionActual);
+    Serial.print(",RPM:");
+    Serial.println(rpm);
+    
+    pulsosAnteriores = posicionActual;
+    tiempoAnterior = tiempoActual;
+  }
+}
+
+void subirElevador() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 150);
+}
+
+void bajarElevador() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, 150);
+}
+
+void detenerElevador() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+}
+
+void leerEncoder() {
+  int a = digitalRead(ENCA);
+  int b = digitalRead(ENCB);
+  if (a == b) {
+    posicionActual++;
+  } else {
+    posicionActual--;
+  }
+}
+
+```
